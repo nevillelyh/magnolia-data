@@ -101,8 +101,8 @@ sealed trait ProtobufField[T] extends Serializable {
   type FromT
   type ToT
 
-  val hasOptional: Boolean
-  val default: Option[T]
+  def hasOptional: Boolean
+  def default: Option[T]
 
   def checkDefaults(descriptor: Descriptor)(cm: CaseMapper): Unit = ()
 
@@ -119,7 +119,7 @@ object ProtobufField {
   }
 
   sealed trait Record[T] extends Aux[T, Message, Message] {
-    override val default: Option[T] = None
+    override def default: Option[T] = None
   }
 
   // ////////////////////////////////////////////////
@@ -133,7 +133,7 @@ object ProtobufField {
       new ProtobufField[T] {
         override type FromT = tc.FromT
         override type ToT = tc.ToT
-        override val hasOptional: Boolean = tc.hasOptional
+        override def hasOptional: Boolean = tc.hasOptional
         override val default: Option[T] = tc.default.map(x => caseClass.construct(_ => x))
         override def from(v: FromT)(cm: CaseMapper): T = caseClass.construct(_ => tc.from(v)(cm))
         override def to(v: T, b: Message.Builder)(cm: CaseMapper): ToT =
@@ -243,7 +243,7 @@ object ProtobufField {
 
   private def aux[T, From, To](_default: T)(f: From => T)(g: T => To): ProtobufField[T] =
     new Aux[T, From, To] {
-      override val hasOptional: Boolean = false
+      override def hasOptional: Boolean = false
       override val default: Option[T] = Some(_default)
       override def from(v: FromT)(cm: CaseMapper): T = f(v)
       override def to(v: T, b: Message.Builder)(cm: CaseMapper): ToT = g(v)
@@ -282,7 +282,7 @@ object ProtobufField {
 
   implicit def pfOption[T](implicit f: ProtobufField[T]): ProtobufField[Option[T]] =
     new Aux[Option[T], f.FromT, f.ToT] {
-      override val hasOptional: Boolean = true
+      override def hasOptional: Boolean = true
       override val default: Option[Option[T]] = f.default match {
         case Some(v) => Some(Some(v))
         case None    => None
@@ -306,7 +306,7 @@ object ProtobufField {
     fc: FactoryCompat[T, C[T]]
   ): ProtobufField[C[T]] =
     new Aux[C[T], ju.List[f.FromT], ju.List[f.ToT]] {
-      override val hasOptional: Boolean = false
+      override def hasOptional: Boolean = false
       override val default: Option[C[T]] = Some(fc.newBuilder.result())
       override def from(v: ju.List[f.FromT])(cm: CaseMapper): C[T] = {
         val b = fc.newBuilder

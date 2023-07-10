@@ -51,7 +51,7 @@ sealed trait ParquetType[T] extends Serializable {
 
   def schema: MessageType
   def avroSchema: AvroSchema
-  val avroCompat: Boolean
+  def avroCompat: Boolean
 
   def setupInput(job: Job): Unit = {
     job.setInputFormatClass(classOf[ParquetInputFormat[T]])
@@ -71,8 +71,8 @@ sealed trait ParquetType[T] extends Serializable {
   def readBuilder(file: InputFile): ReadBuilder[T] = new ReadBuilder(file, readSupport)
   def writeBuilder(file: OutputFile): WriteBuilder[T] = new WriteBuilder(file, writeSupport)
 
-  def write(c: RecordConsumer, v: T): Unit = ()
-  def newConverter: TypeConverter[T] = null
+  def write(c: RecordConsumer, v: T): Unit
+  def newConverter(): TypeConverter[T]
 }
 
 object ParquetType {
@@ -97,7 +97,7 @@ object ParquetType {
         override val avroCompat: Boolean =
           pa == ParquetArray.AvroCompat.avroCompat || f.hasAvroArray
         override def write(c: RecordConsumer, v: T): Unit = r.write(c, v)(cm)
-        override def newConverter: TypeConverter[T] = r.newConverter
+        override def newConverter(): TypeConverter[T] = r.newConverter()
       }
     case _ =>
       throw new IllegalArgumentException(s"ParquetType can only be created from Record. Got $f")
