@@ -34,7 +34,7 @@ import scala.jdk.CollectionConverters._
 import scala.reflect.ClassTag
 
 sealed trait AvroType[T] extends Converter[T, GenericRecord, GenericRecord] {
-  val schema: Schema
+  def schema: Schema
   def apply(r: GenericRecord): T = from(r)
   def apply(t: T): GenericRecord = to(t)
 }

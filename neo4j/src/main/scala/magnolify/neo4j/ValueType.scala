@@ -50,10 +50,7 @@ object ValueType {
 }
 
 sealed trait ValueField[T] extends Serializable {
-  self =>
-
   def from(v: Value)(cm: CaseMapper): T
-
   def to(v: T)(cm: CaseMapper): Value
 }
 

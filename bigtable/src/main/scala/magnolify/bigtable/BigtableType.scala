@@ -113,7 +113,7 @@ object BigtableField {
   sealed trait Record[T] extends BigtableField[T]
 
   sealed trait Primitive[T] extends BigtableField[T] {
-    val size: Option[Int]
+    def size: Option[Int]
     def fromByteString(v: ByteString): T
     def toByteString(v: T): ByteString
 
@@ -187,7 +187,7 @@ object BigtableField {
   class FromWord[T] {
     def apply[U](f: T => U)(g: U => T)(implicit btf: Primitive[T]): Primitive[U] =
       new Primitive[U] {
-        override val size: Option[Int] = btf.size
+        override def size: Option[Int] = btf.size
         def fromByteString(v: ByteString): U = f(btf.fromByteString(v))
         def toByteString(v: U): ByteString = btf.toByteString(g(v))
       }
@@ -196,7 +196,7 @@ object BigtableField {
   private def primitive[T](
     capacity: Int
   )(f: ByteBuffer => T)(g: (ByteBuffer, T) => ByteBuffer): Primitive[T] = new Primitive[T] {
-    override val size: Option[Int] = Some(capacity)
+    override def size: Option[Int] = Some(capacity)
     override def fromByteString(v: ByteString): T = f(v.asReadOnlyByteBuffer())
     override def toByteString(v: T): ByteString = {
       val bb = ByteBuffer.allocate(capacity)
@@ -224,7 +224,7 @@ object BigtableField {
     }
 
   implicit val btfByteString: Primitive[ByteString] = new Primitive[ByteString] {
-    override val size: Option[Int] = None
+    override def size: Option[Int] = None
     override def fromByteString(v: ByteString): ByteString = v
     override def toByteString(v: ByteString): ByteString = v
   }
@@ -268,7 +268,7 @@ object BigtableField {
     fc: FactoryCompat[T, C[T]]
   ): Primitive[C[T]] =
     new Primitive[C[T]] {
-      override val size: Option[Int] = None
+      override def size: Option[Int] = None
 
       override def fromByteString(v: ByteString): C[T] = {
         val buf = v.asReadOnlyByteBuffer()

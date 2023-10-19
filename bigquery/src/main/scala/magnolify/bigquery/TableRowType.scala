@@ -34,9 +34,9 @@ class description(description: String) extends StaticAnnotation with Serializabl
 }
 
 sealed trait TableRowType[T] extends Converter[T, TableRow, TableRow] {
-  val schema: TableSchema
-  val description: String
-  val selectedFields: Seq[String]
+  def schema: TableSchema
+  def description: String
+  def selectedFields: Seq[String]
 
   def apply(v: TableRow): T = from(v)
   def apply(v: T): TableRow = to(v)

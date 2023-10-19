@@ -34,7 +34,7 @@ class doc(msg: String) extends StaticAnnotation with Serializable {
 }
 
 sealed trait ExampleType[T] extends Converter[T, Example, Example.Builder] {
-  val schema: Schema
+  def schema: Schema
   def apply(v: Example): T = from(v)
   def apply(v: T): Example = to(v).build()
 }

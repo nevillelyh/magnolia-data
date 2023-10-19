@@ -87,7 +87,7 @@ object KeyField {
 }
 
 sealed trait EntityField[T] extends Serializable {
-  val keyField: KeyField[T]
+  def keyField: KeyField[T]
   def from(v: Value)(cm: CaseMapper): T
   def to(v: T)(cm: CaseMapper): Value.Builder
 }
