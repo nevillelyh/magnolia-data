@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package magnolify.scalacheck.semiauto
+package magnolify.scalacheck
 
 import magnolia1._
 import org.scalacheck.rng.Seed

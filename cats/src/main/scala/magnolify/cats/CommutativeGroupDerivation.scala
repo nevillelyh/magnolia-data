@@ -14,34 +14,38 @@
  * limitations under the License.
  */
 
-package magnolify.cats.semiauto
+package magnolify.cats
 
-import cats.kernel.CommutativeMonoid
+import cats.kernel.CommutativeGroup
 import magnolia1._
 
 import scala.annotation.implicitNotFound
 import scala.collection.compat._
 
-object CommutativeMonoidDerivation {
-  type Typeclass[T] = CommutativeMonoid[T]
+object CommutativeGroupDerivation {
+  type Typeclass[T] = CommutativeGroup[T]
 
   def join[T](caseClass: CaseClass[Typeclass, T]): Typeclass[T] = {
     val emptyImpl = MonoidMethods.empty(caseClass)
     val combineImpl = SemigroupMethods.combine(caseClass)
-    val combineNImpl = MonoidMethods.combineN(caseClass)
+    val combineNImpl = GroupMethods.combineN(caseClass)
     val combineAllImpl = MonoidMethods.combineAll(caseClass)
     val combineAllOptionImpl = SemigroupMethods.combineAllOption(caseClass)
+    val inverseImpl = GroupMethods.inverse(caseClass)
+    val removeImpl = GroupMethods.remove(caseClass)
 
-    new CommutativeMonoid[T] {
+    new CommutativeGroup[T] {
       override def empty: T = emptyImpl()
       override def combine(x: T, y: T): T = combineImpl(x, y)
       override def combineN(a: T, n: Int): T = combineNImpl(a, n)
       override def combineAll(as: IterableOnce[T]): T = combineAllImpl(as)
       override def combineAllOption(as: IterableOnce[T]): Option[T] = combineAllOptionImpl(as)
+      override def inverse(a: T): T = inverseImpl(a)
+      override def remove(a: T, b: T): T = removeImpl(a, b)
     }
   }
 
-  @implicitNotFound("Cannot derive CommutativeMonoid for sealed trait")
+  @implicitNotFound("Cannot derive CommutativeGroup for sealed trait")
   private sealed trait Dispatchable[T]
   def split[T: Dispatchable](sealedTrait: SealedTrait[Typeclass, T]): Typeclass[T] = ???
 

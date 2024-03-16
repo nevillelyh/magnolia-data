@@ -14,79 +14,76 @@
  * limitations under the License.
  */
 
-package magnolify.cats.semiauto
+package magnolify.cats
 
-import cats.Monoid
+import cats.Semigroup
 import magnolia1._
 
 import scala.annotation.implicitNotFound
 import scala.collection.compat.immutable.ArraySeq
 import scala.collection.compat._
 
-object MonoidDerivation {
-  type Typeclass[T] = Monoid[T]
+object SemigroupDerivation {
+  type Typeclass[T] = Semigroup[T]
 
   def join[T](caseClass: CaseClass[Typeclass, T]): Typeclass[T] = {
-    val emptyImpl = MonoidMethods.empty(caseClass)
     val combineImpl = SemigroupMethods.combine(caseClass)
-    val combineNImpl = MonoidMethods.combineN(caseClass)
-    val combineAllImpl = MonoidMethods.combineAll(caseClass)
+    val combineNImpl = SemigroupMethods.combineN(caseClass)
     val combineAllOptionImpl = SemigroupMethods.combineAllOption(caseClass)
 
-    new Monoid[T] {
-      override def empty: T = emptyImpl()
+    new Semigroup[T] {
       override def combine(x: T, y: T): T = combineImpl(x, y)
       override def combineN(a: T, n: Int): T = combineNImpl(a, n)
-      override def combineAll(as: IterableOnce[T]): T = combineAllImpl(as)
       override def combineAllOption(as: IterableOnce[T]): Option[T] = combineAllOptionImpl(as)
     }
   }
 
-  @implicitNotFound("Cannot derive Monoid for sealed trait")
+  @implicitNotFound("Cannot derive Semigroup for sealed trait")
   private sealed trait Dispatchable[T]
   def split[T: Dispatchable](sealedTrait: SealedTrait[Typeclass, T]): Typeclass[T] = ???
 
   implicit def apply[T]: Typeclass[T] = macro Magnolia.gen[T]
 }
 
-private object MonoidMethods {
-  def empty[T, Typeclass[T] <: Monoid[T]](caseClass: CaseClass[Typeclass, T]): () => T =
-    new Function0[T] with Serializable {
-      @transient private lazy val value = caseClass.construct(_.typeclass.empty)
-      override def apply(): T = value
-    }
+private object SemigroupMethods {
+  def combine[T, Typeclass[T] <: Semigroup[T]](caseClass: CaseClass[Typeclass, T]): (T, T) => T =
+    (x, y) => caseClass.construct(p => p.typeclass.combine(p.dereference(x), p.dereference(y)))
 
-  def combineN[T, Typeclass[T] <: Monoid[T]](caseClass: CaseClass[Typeclass, T]): (T, Int) => T = {
-    val emptyImpl = empty(caseClass)
-    val f = SemigroupMethods.combineNBase(caseClass)
+  def combineNBase[T, Typeclass[T] <: Semigroup[T]](
+    caseClass: CaseClass[Typeclass, T]
+  ): (T, Int) => T =
+    (a: T, n: Int) => caseClass.construct(p => p.typeclass.combineN(p.dereference(a), n))
+
+  def combineN[T, Typeclass[T] <: Semigroup[T]](
+    caseClass: CaseClass[Typeclass, T]
+  ): (T, Int) => T = {
+    val f = combineNBase(caseClass)
     (a: T, n: Int) =>
-      if (n < 0) {
-        throw new IllegalArgumentException("Repeated combining for monoids must have n >= 0")
-      } else if (n == 0) {
-        emptyImpl()
+      if (n <= 0) {
+        throw new IllegalArgumentException("Repeated combining for semigroups must have n > 0")
       } else {
         f(a, n)
       }
   }
 
-  def combineAll[T, Typeclass[T] <: Monoid[T]](
+  def combineAllOption[T, Typeclass[T] <: Semigroup[T]](
     caseClass: CaseClass[Typeclass, T]
-  ): IterableOnce[T] => T = {
-    val combineImpl = SemigroupMethods.combine(caseClass)
-    val emptyImpl = MonoidMethods.empty(caseClass)
+  ): IterableOnce[T] => Option[T] = {
+    val combineImpl = combine(caseClass)
 
     {
       case it: Iterable[T] if it.nonEmpty =>
-        // input is re-iterable and non-empty, combineAll on each field
+        // input is re-iterable and non-empty, combineAllOption on each field
         val result = Array.fill[Any](caseClass.parameters.length)(null)
         var i = 0
         while (i < caseClass.parameters.length) {
           val p = caseClass.parameters(i)
-          result(i) = p.typeclass.combineAll(it.iterator.map(p.dereference))
+          result(i) = p.typeclass.combineAllOption(it.iterator.map(p.dereference)).get
           i += 1
         }
-        caseClass.rawConstruct(ArraySeq.unsafeWrapArray(result))
-      case xs => xs.iterator.foldLeft(emptyImpl())(combineImpl)
+        Some(caseClass.rawConstruct(ArraySeq.unsafeWrapArray(result)))
+      case xs =>
+        xs.iterator.reduceOption(combineImpl)
     }
   }
 }

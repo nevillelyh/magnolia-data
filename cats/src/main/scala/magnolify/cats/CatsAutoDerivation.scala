@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 Spotify AB
+ * Copyright 2023 Spotify AB
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,7 @@
 
 package magnolify.cats
 
-import cats._
+import cats.{Eq, Group, Hash, Monoid, Semigroup, Show}
 import cats.kernel.{Band, CommutativeGroup, CommutativeMonoid, CommutativeSemigroup}
 
 // set implicit priority to avoid conflicts
@@ -24,9 +24,7 @@ import cats.kernel.{Band, CommutativeGroup, CommutativeMonoid, CommutativeSemigr
 // use shapeless.LowPriority so the
 // provided cats type classes are always preferred
 // triggers derivation as last resort
-package object auto extends LowPriority0Implicits
-
-trait LowPriority0Implicits extends LowPriority2Implicits {
+trait CatsAutoDerivation0 extends CatsAutoDerivation1 {
   implicit def genShow[T](implicit lp: shapeless.LowPriority): Show[T] =
     macro CatsMacros.genShowMacro[T]
   // CommutativeGroup <: Group | CommutativeMonoid
@@ -37,7 +35,7 @@ trait LowPriority0Implicits extends LowPriority2Implicits {
     macro CatsMacros.genHashMacro[T]
 }
 
-trait LowPriority2Implicits extends LowPriority3Implicits {
+trait CatsAutoDerivation1 extends CatsAutoDerivation2 {
   implicit def genEq[T](implicit lp: shapeless.LowPriority): Eq[T] =
     macro CatsMacros.genEqMacro[T]
   // Group <: Monoid
@@ -45,13 +43,13 @@ trait LowPriority2Implicits extends LowPriority3Implicits {
     macro CatsMacros.genGroupMacro[T]
 }
 
-trait LowPriority3Implicits extends LowPriority4Implicits {
+trait CatsAutoDerivation2 extends CatsAutoDerivation3 {
   // CommutativeMonoid <: Monoid | CommutativeSemigroup
   implicit def genCommutativeMonoid[T](implicit lp: shapeless.LowPriority): CommutativeMonoid[T] =
     macro CatsMacros.genCommutativeMonoidMacro[T]
 }
 
-trait LowPriority4Implicits extends LowPriority5Implicits {
+trait CatsAutoDerivation3 extends CatsAutoDerivation4 {
   // CommutativeSemigroup <: Semigroup
   implicit def genCommutativeSemigroup[T](implicit
     lp: shapeless.LowPriority
@@ -62,13 +60,13 @@ trait LowPriority4Implicits extends LowPriority5Implicits {
     macro CatsMacros.genMonoidMacro[T]
 }
 
-trait LowPriority5Implicits extends LowPriority6Implicits {
+trait CatsAutoDerivation4 extends CatsAutoDerivation5 {
   // Band <: Semigroup
   implicit def genBand[T](implicit lp: shapeless.LowPriority): Band[T] =
     macro CatsMacros.genBandMacro[T]
 }
 
-trait LowPriority6Implicits {
+trait CatsAutoDerivation5 {
   implicit def genSemigroup[T](implicit lp: shapeless.LowPriority): Semigroup[T] =
     macro CatsMacros.genSemigroupMacro[T]
 }

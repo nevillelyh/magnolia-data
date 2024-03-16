@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package magnolify.cats.semiauto
+package magnolify.cats
 
 import cats.Eq
 import magnolia1._

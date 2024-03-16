@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 Spotify AB
+ * Copyright 2023 Spotify AB
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,6 +14,22 @@
  * limitations under the License.
  */
 
-package magnolify.guava
+package magnolify.scalacheck
 
-package object semiauto extends FunnelImplicits
+import scala.reflect.macros.*
+
+private object ScalacheckMacros {
+
+  def genArbitraryMacro[T: c.WeakTypeTag](c: whitebox.Context): c.Tree = {
+    import c.universe.*
+    val wtt = weakTypeTag[T]
+    q"""_root_.magnolify.scalacheck.ArbitraryDerivation.apply[$wtt]"""
+  }
+
+  def genCogenMacro[T: c.WeakTypeTag](c: whitebox.Context): c.Tree = {
+    import c.universe.*
+    val wtt = weakTypeTag[T]
+    q"""_root_.magnolify.scalacheck.CogenDerivation.apply[$wtt]"""
+  }
+
+}
