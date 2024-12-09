@@ -33,7 +33,7 @@ import org.tensorflow.metadata.v0.Annotation
 import org.tensorflow.metadata.v0.Feature
 import org.tensorflow.metadata.v0.FeatureType
 import org.tensorflow.metadata.v0.Schema
-import org.tensorflow.proto.example.Example
+import org.tensorflow.proto.Example
 
 import java.net.URI
 import java.time.Duration

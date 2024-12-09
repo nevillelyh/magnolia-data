@@ -45,7 +45,7 @@ val scalacheckVersion = "1.18.1"
 val shapelessVersion = "2.3.12"
 val slf4jVersion = "2.0.16"
 val tensorflowMetadataVersion = "1.15.0"
-val tensorflowVersion = "0.5.0"
+val tensorflowVersion = "1.0.0"
 
 // project
 ThisBuild / tlBaseVersion := "0.7"

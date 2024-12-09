@@ -21,7 +21,7 @@ import magnolia1.*
 import magnolify.shared.*
 import magnolify.shims.FactoryCompat
 import org.tensorflow.metadata.v0.{Annotation, Feature as FeatureSchema, FeatureType, Schema}
-import org.tensorflow.proto.example.*
+import org.tensorflow.proto.*
 
 import java.{lang as jl, util as ju}
 import scala.annotation.{implicitNotFound, StaticAnnotation}
