@@ -347,7 +347,7 @@ jobs:
 
       - name: Test
         env:
-          JAVA_OPTS: '-Davro.version=1.8.2'
+          JAVA_OPTS: '-Davro.version=1.9.2'
         run: sbt '++ ${{ matrix.scala }}' avro/test
 
   site:

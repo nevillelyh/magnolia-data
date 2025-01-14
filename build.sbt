@@ -185,7 +185,7 @@ ThisBuild / githubWorkflowAddedJobs ++= Seq(
       List(
         WorkflowStep.Sbt(
           List("avro/test"),
-          env = Map("JAVA_OPTS" -> "-Davro.version=1.8.2"),
+          env = Map("JAVA_OPTS" -> "-Davro.version=1.9.2"),
           name = Some("Test")
         )
       ),
