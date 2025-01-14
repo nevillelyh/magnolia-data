@@ -30,18 +30,27 @@ import org.apache.parquet.hadoop.{
 }
 import org.apache.parquet.io.api._
 import org.apache.parquet.io.{InputFile, OutputFile}
-import org.apache.parquet.schema.MessageType
+import org.apache.parquet.schema.{MessageType, Type}
 import org.slf4j.LoggerFactory
 import org.typelevel.scalaccompat.annotation.nowarn
 
 sealed trait ParquetArray
 
 /**
- * Add `import magnolify.parquet.ParquetArray.AvroCompat._` to generate AVRO schema on write
+ * Add `import magnolify.parquet.ParquetArray.AvroCompat._` to generate generate Avro-compatible
+ * array schemas. This import is DEPRECATED. Instead, pass the following option to your Parquet
+ * Configuration:
+ *
+ * magnolify.parquet.write-grouped-arrays: true
  */
 object ParquetArray {
   implicit case object default extends ParquetArray
 
+  @deprecated(
+    message =
+      "AvroCompat import is deprecated; set Parquet Configuration option `magnolify.parquet.write-grouped-arrays: true` instead",
+    since = "0.8.0"
+  )
   object AvroCompat {
     implicit case object avroCompat extends ParquetArray
   }
@@ -52,7 +61,6 @@ sealed trait ParquetType[T] extends Serializable {
 
   def schema: MessageType
   def avroSchema: AvroSchema
-  val avroCompat: Boolean
 
   def setupInput(job: Job): Unit = {
     job.setInputFormatClass(classOf[ParquetInputFormat[T]])
@@ -72,33 +80,70 @@ sealed trait ParquetType[T] extends Serializable {
   def readBuilder(file: InputFile): ReadBuilder[T] = new ReadBuilder(file, readSupport)
   def writeBuilder(file: OutputFile): WriteBuilder[T] = new WriteBuilder(file, writeSupport)
 
-  def write(c: RecordConsumer, v: T): Unit = ()
-  def newConverter: TypeConverter[T] = null
+  private[parquet] def properties: MagnolifyParquetProperties
+
+  private[parquet] def write(c: RecordConsumer, v: T): Unit = ()
+  private[parquet] def newConverter(writerSchema: Type): TypeConverter[T] = null
 }
 
 object ParquetType {
   private val logger = LoggerFactory.getLogger(this.getClass)
 
   implicit def apply[T](implicit f: ParquetField[T], pa: ParquetArray): ParquetType[T] =
-    ParquetType(CaseMapper.identity)
+    ParquetType(CaseMapper.identity, MagnolifyParquetProperties.Default)
 
   def apply[T](
     cm: CaseMapper
+  )(implicit f: ParquetField[T], pa: ParquetArray): ParquetType[T] =
+    ParquetType[T](cm, MagnolifyParquetProperties.Default)(f, pa)
+
+  def apply[T](
+    conf: Configuration
+  )(implicit f: ParquetField[T], pa: ParquetArray): ParquetType[T] =
+    ParquetType[T](
+      CaseMapper.identity, {
+        val writeGroupedArraysOpt =
+          Option(conf.get(MagnolifyParquetConfigurationCompat.WriteGroupedArrays)).map(_.toBoolean)
+        val writeMetadataOpt = Option(
+          conf.get(MagnolifyParquetConfigurationCompat.WriteAvroSchemaToMetadata)
+        ).map(_.toBoolean)
+
+        new MagnolifyParquetProperties {
+          override def writeGroupedArrays: Boolean =
+            writeGroupedArraysOpt.getOrElse(super.writeGroupedArrays)
+          override def writeAvroSchemaToMetadata: Boolean =
+            writeMetadataOpt.getOrElse(super.writeAvroSchemaToMetadata)
+        }
+      }
+    )(f, pa)
+
+  def apply[T](
+    properties: MagnolifyParquetProperties
+  )(implicit f: ParquetField[T], pa: ParquetArray): ParquetType[T] =
+    ParquetType[T](CaseMapper.identity, properties)(f, pa)
+
+  def apply[T](
+    cm: CaseMapper,
+    props: MagnolifyParquetProperties
   )(implicit f: ParquetField[T], pa: ParquetArray): ParquetType[T] = f match {
     case r: ParquetField.Record[_] =>
       new ParquetType[T] {
-        @transient override lazy val schema: MessageType = Schema.message(r.schema(cm))
-        @transient override lazy val avroSchema: AvroSchema = {
+        @transient override def schema: MessageType =
+          Schema.message(r.schema(cm, properties))
+
+        @transient override def avroSchema: AvroSchema = {
           val s = new AvroSchemaConverter().convert(schema)
           // add doc to avro schema
           val fieldDocs = f.fieldDocs(cm)
           SchemaUtil.deepCopy(s, f.typeDoc, fieldDocs.get)
         }
 
-        override val avroCompat: Boolean =
-          pa == ParquetArray.AvroCompat.avroCompat || f.hasAvroArray
-        override def write(c: RecordConsumer, v: T): Unit = r.write(c, v)(cm)
-        override def newConverter: TypeConverter[T] = r.newConverter
+        override def write(c: RecordConsumer, v: T): Unit =
+          r.write(c, v)(cm, properties)
+        override private[parquet] def newConverter(writerSchema: Type): TypeConverter[T] =
+          r.newConverter(writerSchema)
+
+        override private[parquet] def properties: MagnolifyParquetProperties = props
       }
     case _ =>
       throw new IllegalArgumentException(s"ParquetType can only be created from Record. Got $f")
@@ -120,7 +165,6 @@ object ParquetType {
 
   // From AvroReadSupport
   private val AVRO_SCHEMA_METADATA_KEY = "parquet.avro.schema"
-  private val OLD_AVRO_SCHEMA_METADATA_KEY = "avro.schema"
 
   class ReadSupport[T](private var parquetType: ParquetType[T]) extends hadoop.ReadSupport[T] {
     def this() = this(null)
@@ -133,25 +177,17 @@ object ParquetType {
         parquetType = SerializationUtils.fromBase64[ParquetType[T]](readKeyType)
       }
 
-      val metadata = context.getKeyValueMetadata
-      val model = metadata.get(ParquetWriter.OBJECT_MODEL_NAME_PROP)
-      val isAvroFile = (model != null && model.contains("avro")) ||
-        metadata.containsKey(AVRO_SCHEMA_METADATA_KEY) ||
-        metadata.containsKey(OLD_AVRO_SCHEMA_METADATA_KEY)
-      if (isAvroFile && !parquetType.avroCompat) {
-        logger.warn(
-          "Parquet file was written from Avro records, " +
-            "`import magnolify.parquet.ParquetArray.AvroCompat._` to read correctly"
-        )
+      val requestedSchema = {
+        val s = Schema.message(parquetType.schema)
+        // If reading Avro, roundtrip schema using parquet-avro converter to ensure array compatibility;
+        // magnolify-parquet does not automatically wrap repeated fields into a group like parquet-avro does
+        if (Schema.hasGroupedArray(context.getFileSchema)) {
+          val converter = new AvroSchemaConverter()
+          converter.convert(converter.convert(s))
+        } else {
+          s
+        }
       }
-      if (!isAvroFile && parquetType.avroCompat) {
-        logger.warn(
-          "Parquet file was not written from Avro records, " +
-            "remove `import magnolify.parquet.ParquetArray.AvroCompat._` to read correctly"
-        )
-      }
-
-      val requestedSchema = Schema.message(parquetType.schema)
       Schema.checkCompatibility(context.getFileSchema, requestedSchema)
       new hadoop.ReadSupport.ReadContext(requestedSchema, java.util.Collections.emptyMap())
     }
@@ -163,7 +199,7 @@ object ParquetType {
       readContext: hadoop.ReadSupport.ReadContext
     ): RecordMaterializer[T] =
       new RecordMaterializer[T] {
-        private val root = parquetType.newConverter
+        private val root = parquetType.newConverter(fileSchema)
         override def getCurrentRecord: T = root.get
         override def getRootConverter: GroupConverter = root.asGroupConverter()
       }
@@ -183,16 +219,23 @@ object ParquetType {
 
       val schema = Schema.message(parquetType.schema)
       val metadata = new java.util.HashMap[String, String]()
-      if (parquetType.avroCompat) {
-        // This overrides `WriteSupport#getName`
-        metadata.put(ParquetWriter.OBJECT_MODEL_NAME_PROP, "avro")
-        metadata.put(AVRO_SCHEMA_METADATA_KEY, parquetType.avroSchema.toString())
-      } else {
-        logger.warn(
-          "Parquet file is being written with no avro compatibility, this mode is not " +
-            "producing schema. Add `import magnolify.parquet.ParquetArray.AvroCompat._` to " +
-            "generate schema"
-        )
+
+      if (parquetType.properties.writeAvroSchemaToMetadata) {
+        try {
+          metadata.put(
+            AVRO_SCHEMA_METADATA_KEY,
+            parquetType.avroSchema.toString()
+          )
+        } catch {
+          // parquet-avro has greater schema restrictions than magnolify-parquet, e.g., parquet-avro does not
+          // support Maps with non-Binary key types
+          case e: IllegalArgumentException =>
+            logger.warn(
+              s"Writer schema `$schema` contains a type not supported by Avro schemas; will not write " +
+                s"key $AVRO_SCHEMA_METADATA_KEY to file metadata",
+              e
+            )
+        }
       }
 
       new hadoop.WriteSupport.WriteContext(schema, metadata)

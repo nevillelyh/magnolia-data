@@ -742,6 +742,7 @@ lazy val tools = project
       "com.google.apis" % "google-api-services-bigquery" % bigqueryVersion,
       "org.apache.avro" % "avro" % avroVersion % Provided,
       "org.apache.parquet" % "parquet-hadoop" % parquetVersion,
+      "org.apache.hadoop" % "hadoop-common" % hadoopVersion,
       "org.typelevel" %% "paiges-core" % paigesVersion
     )
   )

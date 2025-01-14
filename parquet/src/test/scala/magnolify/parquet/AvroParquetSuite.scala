@@ -24,7 +24,6 @@ import magnolify.avro.AvroType
 import magnolify.shared.{doc, CaseMapper}
 import magnolify.avro.unsafe._
 import magnolify.parquet.unsafe._
-import magnolify.parquet.ParquetArray.AvroCompat._
 import magnolify.parquet.util.AvroSchemaComparer
 import magnolify.scalacheck.auto._
 import magnolify.scalacheck.TestArbitrary._
@@ -41,9 +40,13 @@ import org.apache.parquet.avro.{
 }
 import org.scalacheck._
 
+import scala.annotation.nowarn
 import scala.reflect.ClassTag
 
+@nowarn("cat=deprecation") // Suppress warnings from importing AvroCompat
 class AvroParquetSuite extends MagnolifySuite {
+
+  import magnolify.parquet.ParquetArray.AvroCompat._
 
   private def test[T: Arbitrary: ClassTag]()(implicit
     at: AvroType[T],
@@ -77,7 +80,8 @@ class AvroParquetSuite extends MagnolifySuite {
         val r = at(t)
 
         val out = new TestOutputFile
-        val writer = AvroParquetWriter.builder[GenericRecord](out).withSchema(at.schema).build()
+        val writer =
+          AvroParquetWriter.builder[GenericRecord](out).withSchema(at.schema).build()
         writer.write(r)
         writer.close()
 

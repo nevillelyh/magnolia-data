@@ -27,6 +27,10 @@ import magnolify.shared.doc
 import magnolify.shared.TestEnumType._
 import magnolify.test.Simple._
 import magnolify.test._
+import org.apache.hadoop.conf.Configuration
+import org.apache.parquet.avro.AvroSchemaConverter
+import org.apache.parquet.hadoop.ParquetWriter
+import org.apache.parquet.hadoop.{api => hadoop}
 import org.apache.parquet.io._
 import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName
 import org.scalacheck._
@@ -59,7 +63,6 @@ class ParquetTypeSuite extends MagnolifySuite {
         val writer = tpe.writeBuilder(out).build()
         writer.write(t)
         writer.close()
-
         val in = new TestInputFile(out.getBytes)
         val reader = tpe.readBuilder(in).build()
         val copy = reader.read()
@@ -218,6 +221,59 @@ class ParquetTypeSuite extends MagnolifySuite {
       assertEquals(inner.getFields.asScala.map(_.getName).toSeq, Seq("INNERFIRST"))
     }
   }
+
+  test("AvroCompat") {
+    def conf(writeGroupedArrays: Boolean): Configuration = {
+      val c = new Configuration()
+      c.setBoolean(MagnolifyParquetConfigurationCompat.WriteGroupedArrays, writeGroupedArrays)
+      c
+    }
+
+    val ptNonGroupedArrays = ParquetType[WithList](conf(writeGroupedArrays = false))
+    // Assert that by default, Magnolify doesn't wrap repeated fields in group types
+    val nonAvroCompliantSchema = """|message magnolify.parquet.WithList {
+                                    |  required binary s (STRING);
+                                    |  repeated binary l (STRING);
+                                    |}
+                                    |""".stripMargin
+
+    assert(!Schema.hasGroupedArray(ptNonGroupedArrays.schema))
+    assertEquals(nonAvroCompliantSchema, ptNonGroupedArrays.schema.toString)
+
+    // Assert that ReadSupport converts non-grouped arrays to grouped arrays depending on writer schema
+    val asc = new AvroSchemaConverter()
+    val readSupport = ptNonGroupedArrays.readSupport.init(
+      new hadoop.InitContext(
+        new Configuration(),
+        Map(ParquetWriter.OBJECT_MODEL_NAME_PROP -> Set("avro").asJava).asJava,
+        asc.convert(
+          asc.convert(ptNonGroupedArrays.schema)
+        ) // Use converted Avro-compliant schema, which groups lists
+      )
+    )
+
+    val avroCompliantSchema = """|message magnolify.parquet.WithList {
+                                 |  required binary s (STRING);
+                                 |  required group l (LIST) {
+                                 |    repeated binary array (STRING);
+                                 |  }
+                                 |}
+                                 |""".stripMargin
+
+    assert(Schema.hasGroupedArray(readSupport.getRequestedSchema))
+    assertEquals(avroCompliantSchema, readSupport.getRequestedSchema.toString)
+
+    // Assert that WriteSupport uses non-grouped schema otherwise
+    val wc1 = ptNonGroupedArrays.writeSupport.init(new Configuration())
+    assertEquals(nonAvroCompliantSchema, wc1.getSchema.toString)
+    assertEquals(ptNonGroupedArrays.schema, wc1.getSchema)
+
+    // Assert that WriteSupport uses grouped schema when explicitly configured
+    val ptGroupedArrays = ParquetType[WithList](conf(writeGroupedArrays = true))
+    val wc2 = ptGroupedArrays.writeSupport.init(new Configuration())
+    assertEquals(avroCompliantSchema, wc2.getSchema.toString)
+    assertEquals(ptGroupedArrays.schema, wc2.getSchema)
+  }
 }
 
 case class Unsafe(c: Char)
@@ -250,6 +306,8 @@ case class ParquetNestedListDoc(
   @doc("integers")
   i: List[Integers]
 )
+
+case class WithList(s: String, l: List[String])
 
 class TestInputFile(ba: Array[Byte]) extends InputFile {
   private val bais = new ByteArrayInputStream(ba)

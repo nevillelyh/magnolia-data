@@ -294,6 +294,7 @@ object SchemaEvolutionSuite {
 }
 
 @nowarn("msg=Unused import")
+@nowarn("cat=deprecation") // Suppress warnings from importing AvroCompat
 class SchemaEvolutionSuite extends MagnolifySuite {
   import SchemaEvolutionSuite._
 

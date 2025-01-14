@@ -20,8 +20,10 @@ import magnolify.parquet._
 import magnolify.test._
 
 import java.time.{Instant, LocalDate, LocalDateTime, LocalTime, OffsetTime}
+import scala.annotation.nowarn
 import scala.reflect.ClassTag
 
+@nowarn("cat=deprecation") // Suppress warnings from importing AvroCompat
 class ParquetParserSuite extends MagnolifySuite {
   import ParquetParserSuite._
 

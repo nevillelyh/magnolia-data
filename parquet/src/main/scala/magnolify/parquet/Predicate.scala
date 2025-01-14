@@ -52,7 +52,10 @@ object Predicate {
   )(filterFn: ScalaFieldT => Boolean)(implicit
     pf: ParquetField.Primitive[ScalaFieldT]
   ): FilterPredicate = {
-    val fieldType = pf.schema(CaseMapper.identity).asPrimitiveType().getPrimitiveTypeName
+    val fieldType =
+      pf.schema(CaseMapper.identity, MagnolifyParquetProperties.Default)
+        .asPrimitiveType()
+        .getPrimitiveTypeName
 
     val column = fieldType match {
       case PrimitiveTypeName.INT32                           => FilterApi.intColumn(fieldName)
@@ -65,7 +68,9 @@ object Predicate {
     }
 
     def wrap[T](addFn: (PrimitiveConverter, T) => Unit): T => ScalaFieldT = {
-      lazy val converter = pf.newConverter
+      lazy val converter = pf.newConverter(
+        pf.schema(CaseMapper.identity, MagnolifyParquetProperties.Default)
+      )
       value => {
         addFn(converter.asPrimitiveConverter(), value)
         converter.get
