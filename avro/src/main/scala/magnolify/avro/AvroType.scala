@@ -27,7 +27,7 @@ import org.joda.{time => joda}
 import java.nio.{ByteBuffer, ByteOrder}
 import java.time._
 import java.{util => ju}
-import scala.annotation.implicitNotFound
+import scala.annotation.{implicitNotFound, nowarn}
 import scala.collection.concurrent
 import scala.collection.compat._
 import scala.jdk.CollectionConverters._
@@ -250,6 +250,31 @@ object AvroField {
       override def to(v: Option[T])(cm: CaseMapper): f.ToT = v match {
         case None    => null.asInstanceOf[f.ToT]
         case Some(x) => f.to(x)(cm)
+      }
+    }
+
+  implicit def afEither[A, B](implicit
+    fa: AvroField[A],
+    fb: AvroField[B]
+  ): AvroField[Either[A, B]] =
+    new Aux[Either[A, B], Any, Any] {
+      override protected def buildSchema(cm: CaseMapper): Schema =
+        Schema.createUnion(fa.schema(cm), fb.schema(cm))
+      // `Either[A, B]` is a `UNION` of `[A, B]` and must default to first type `A`
+      override def makeDefault(d: Either[A, B])(cm: CaseMapper): fa.ToT = {
+        require(d.isLeft, "Either[A, B] can only default to Left[A]")
+        fa.to(d.left.get)(cm): @nowarn
+      }
+      override def from(v: Any)(cm: CaseMapper): Either[A, B] = {
+        GenericData.get().resolveUnion(schema(cm), v) match {
+          case 0 => Left(fa.from(v.asInstanceOf[fa.FromT])(cm))
+          case 1 => Right(fb.from(v.asInstanceOf[fb.FromT])(cm))
+        }
+      }
+
+      override def to(v: Either[A, B])(cm: CaseMapper): Any = v match {
+        case Left(a)  => fa.to(a)(cm)
+        case Right(b) => fb.to(b)(cm)
       }
     }
 

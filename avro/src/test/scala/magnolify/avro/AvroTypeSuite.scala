@@ -317,6 +317,7 @@ class AvroTypeSuite extends MagnolifySuite {
       val inner = DefaultInner(
         2,
         Some(2),
+        Right("2"),
         List(2, 2),
         Map("b" -> 2),
         JavaEnums.Color.GREEN,
@@ -337,6 +338,7 @@ class AvroTypeSuite extends MagnolifySuite {
       val inner = DefaultInner(
         3,
         Some(3),
+        Right("3"),
         List(3, 3),
         Map("c" -> 3),
         JavaEnums.Color.BLUE,
@@ -359,6 +361,7 @@ class AvroTypeSuite extends MagnolifySuite {
   }
 
   testFail(AvroType[DefaultSome])("Option[T] can only default to None")
+  testFail(AvroType[DefaultEither])("Either[A, B] can only default to Left[A]")
 
   {
     implicit val at: AvroType[LowerCamel] = AvroType[LowerCamel](CaseMapper(_.toUpperCase))
@@ -493,6 +496,7 @@ case class DoubleFieldDoc(@doc("doc1") @doc("doc2") i: Int)
 case class DefaultInner(
   i: Int = 1,
   o: Option[Int] = None,
+  e: Either[Int, String] = Left(1),
   l: List[Int] = List(1, 1),
   m: Map[String, Int] = Map("a" -> 1),
   je: JavaEnums.Color = JavaEnums.Color.RED,
@@ -508,6 +512,7 @@ case class DefaultOuter(
   i: DefaultInner = DefaultInner(
     2,
     None,
+    Left(2),
     List(2, 2),
     Map("b" -> 2),
     JavaEnums.Color.GREEN,
@@ -521,7 +526,9 @@ case class DefaultOuter(
   ),
   o: Option[DefaultInner] = None
 )
+
 case class DefaultSome(o: Option[Int] = Some(1))
+case class DefaultEither(e: Either[Int, String] = Right("1"))
 
 case class DefaultBytes(
   a: Array[Byte] = Array(2, 2)
