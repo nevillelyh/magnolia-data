@@ -52,7 +52,7 @@ def magnolify(version: String): List[ModuleID] = {
     "magnolify-tensorflow"
   )
 
-  modules.map { name => ("com.spotify" %% name % version % "compile->compile,provided") }
+  modules.map(name => "com.spotify" %% name % version % "compile->compile,provided")
 }
 
 // coursied does not respect compile->compile,provided
